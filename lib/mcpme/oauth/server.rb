@@ -316,7 +316,7 @@ module Mcpme
           </head>
           <body>
             <h1>mcpme</h1>
-            <p class="hint">Sign in with OAUTH_USER / OAUTH_PASSWORD from your .env file.</p>
+            <p class="hint">Accesso OAuth per l'MCP che esegue comandi shell sul tuo PC. Usa OAUTH_USER / OAUTH_PASSWORD dal file .env.</p>
             #{error_html}
             <form method="post" action="/authorize">
               #{hidden}
