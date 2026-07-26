@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "dotenv/load"
+require_relative "../lib/mcpme"
+require "puma"
+require "puma/configuration"
+require "puma/launcher"
+
+config = Mcpme::Config.load
+app = Mcpme::App.build(config: config)
+
+puts "mcpme listening on #{config.base_url}"
+puts "  MCP endpoint: #{config.mcp_resource_url}"
+puts "  OAuth login uses OAUTH_USER / OAUTH_PASSWORD from .env"
+
+puma_config = Puma::Configuration.new do |c|
+  c.app app
+  c.environment ENV.fetch("RACK_ENV", "development")
+  c.quiet false
+
+  if config.ssl_enabled?
+    cert = File.expand_path(config.ssl_cert_path)
+    key = File.expand_path(config.ssl_key_path)
+    puts "  TLS: #{cert} (mkcert / local)"
+    c.ssl_bind config.host, config.port, {
+      cert: cert,
+      key: key,
+      verify_mode: "none"
+    }
+  else
+    if config.https?
+      warn "warning: MCP_BASE_URL is https but cert/key missing:"
+      warn "  #{config.ssl_cert_path}"
+      warn "  #{config.ssl_key_path}"
+      warn "  run: ./mcpme.sh cert"
+    end
+    c.bind "tcp://#{config.host}:#{config.port}"
+  end
+end
+
+Puma::Launcher.new(puma_config).run

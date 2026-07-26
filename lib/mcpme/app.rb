@@ -1,0 +1,117 @@
+# frozen_string_literal: true
+
+module Mcpme
+  class App
+    OAUTH_PATHS = [
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/mcp",
+      "/.well-known/oauth-authorization-server",
+      "/authorize",
+      "/token",
+      "/register"
+    ].freeze
+
+    def self.build(config: Config.load)
+      store = OAuth::Store.new
+      oauth = OAuth::Server.new(config: config, store: store)
+      mcp = McpServer.build
+      host = URI(config.base_url).host
+      origin = config.base_url
+      public = Mcpme::TunnelHelpers.public_hostname?(host)
+
+      transport = MCP::Server::Transports::StreamableHTTPTransport.new(
+        mcp,
+        enable_json_response: true,
+        # Behind Cloudflare Tunnel the Host is the public hostname; Anthropic
+        # origins won't match same-origin, so disable DNS-rebinding checks publicly.
+        dns_rebinding_protection: !public,
+        allowed_hosts: [host, "127.0.0.1", "localhost"].compact.uniq,
+        allowed_origins: [
+          origin,
+          "https://claude.ai",
+          "https://www.claude.ai",
+          "https://claude.com",
+          "https://www.claude.com",
+          "https://127.0.0.1:#{config.port}",
+          "https://localhost:#{config.port}",
+          "http://127.0.0.1:#{config.port}",
+          "http://localhost:#{config.port}"
+        ].uniq
+      )
+
+      new(config: config, oauth: oauth, transport: transport)
+    end
+
+    def initialize(config:, oauth:, transport:)
+      @config = config
+      @oauth = oauth
+      @transport = transport
+      @logger = AuthMiddleware.new(
+        method(:dispatch),
+        oauth: oauth
+      )
+    end
+
+    def call(env)
+      @logger.call(env)
+    end
+
+    private
+
+    def dispatch(env)
+      request = Rack::Request.new(env)
+      path = request.path_info
+
+      if OAUTH_PATHS.include?(path)
+        return @oauth.call(env)
+      end
+
+      if mcp_endpoint?(request)
+        return @transport.call(env)
+      end
+
+      if path_root?(path) && (request.get? || request.head?)
+        return root_response
+      end
+
+      [404, { "content-type" => "text/plain" }, ["Not Found"]]
+    end
+
+    def mcp_endpoint?(request)
+      path = request.path_info
+      return true if path == "/mcp" || path.start_with?("/mcp/")
+
+      return false unless path_root?(path)
+
+      case request.request_method
+      when "POST", "DELETE"
+        true
+      when "GET", "HEAD"
+        accept = request.get_header("HTTP_ACCEPT").to_s.downcase
+        accept.include?("text/event-stream") ||
+          !request.get_header("HTTP_MCP_PROTOCOL_VERSION").to_s.empty? ||
+          (accept.include?("application/json") && !accept.include?("text/html"))
+      else
+        false
+      end
+    end
+
+    def path_root?(path)
+      path.nil? || path.empty? || path == "/"
+    end
+
+    def root_response
+      body = {
+        name: "mcpme",
+        version: Mcpme::VERSION,
+        description: "MCP che permette di eseguire comandi shell sul PC dell'utente (dove gira mcpme).",
+        mcp_endpoint: @config.mcp_resource_url,
+        oauth: {
+          protected_resource_metadata: "#{@config.base_url}/.well-known/oauth-protected-resource",
+          authorization_server_metadata: "#{@config.base_url}/.well-known/oauth-authorization-server"
+        }
+      }
+      [200, { "content-type" => "application/json" }, [JSON.generate(body)]]
+    end
+  end
+end

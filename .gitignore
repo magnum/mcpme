@@ -1,0 +1,14 @@
+certs/
+cloudflared/*.json
+cloudflared/config.yml
+*.pem
+.env
+.bundle/
+vendor/bundle/
+*.gem
+.DS_Store
+tmp/
+log/
+*.stdout.log
+*.stderr.log
+.ruby-lsp/

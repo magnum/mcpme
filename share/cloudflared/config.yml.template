@@ -1,0 +1,10 @@
+tunnel: __TUNNEL_ID__
+credentials-file: __CREDENTIALS_FILE__
+
+ingress:
+  - hostname: __TUNNEL_HOSTNAME__
+    service: https://127.0.0.1:__ORIGIN_PORT__
+    originRequest:
+      noTLSVerify: true
+      connectTimeout: 30s
+  - service: http_status:404
