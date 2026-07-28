@@ -9,7 +9,7 @@ module Mcpme
     attr_reader :oauth_user, :oauth_password, :base_url, :host, :port,
                 :ssl_cert_path, :ssl_key_path, :oauth_token_ttl_days,
                 :secret_key, :pushover_token, :pushover_user, :pushover_device,
-                :allowed_remote_ips_path
+                :allowed_remote_ips_path, :confirm_wait_seconds
 
     def self.load
       base_url = ENV.fetch("MCP_BASE_URL", "http://127.0.0.1:9292").chomp("/")
@@ -33,17 +33,27 @@ module Mcpme
         ssl_cert_path: cert,
         ssl_key_path: key,
         oauth_token_ttl_days: Float(ENV.fetch("OAUTH_TOKEN_TTL_DAYS", "7")),
-        confirm_new_remote_ips: truthy?(ENV["CONFIRM_NEW_REMOTE_IPS"]),
+        confirm_remote_ips: env_boolean(ENV["CONFIRM_REMOTE_IPS"]),
         secret_key: ENV.fetch("SECRET_KEY", ""),
         pushover_token: ENV.fetch("PUSHOVER_TOKEN", ""),
         pushover_user: ENV.fetch("PUSHOVER_USER", ""),
         pushover_device: ENV.fetch("PUSHOVER_DEVICE", ""),
-        allowed_remote_ips_path: ips_path
+        allowed_remote_ips_path: ips_path,
+        confirm_wait_seconds: Integer(ENV.fetch("CONFIRM_WAIT_SECONDS", "15"))
       )
     end
 
-    def self.truthy?(value)
-      %w[1 true yes on].include?(value.to_s.strip.downcase)
+    def self.env_boolean(value, default: false)
+      return default if value.nil? || value.to_s.strip.empty?
+
+      case value.to_s.strip.downcase
+      when "1", "true", "yes", "on"
+        true
+      when "0", "false", "no", "off"
+        false
+      else
+        default
+      end
     end
 
     def initialize(
@@ -55,12 +65,13 @@ module Mcpme
       ssl_cert_path:,
       ssl_key_path:,
       oauth_token_ttl_days:,
-      confirm_new_remote_ips:,
+      confirm_remote_ips:,
       secret_key:,
       pushover_token:,
       pushover_user:,
       pushover_device:,
-      allowed_remote_ips_path:
+      allowed_remote_ips_path:,
+      confirm_wait_seconds:
     )
       @oauth_user = oauth_user
       @oauth_password = oauth_password
@@ -70,16 +81,17 @@ module Mcpme
       @ssl_cert_path = ssl_cert_path
       @ssl_key_path = ssl_key_path
       @oauth_token_ttl_days = oauth_token_ttl_days
-      @confirm_new_remote_ips = confirm_new_remote_ips
+      @confirm_remote_ips = confirm_remote_ips
       @secret_key = secret_key
       @pushover_token = pushover_token
       @pushover_user = pushover_user
       @pushover_device = pushover_device
       @allowed_remote_ips_path = allowed_remote_ips_path
+      @confirm_wait_seconds = confirm_wait_seconds
     end
 
-    def confirm_new_remote_ips?
-      @confirm_new_remote_ips
+    def confirm_remote_ips?
+      @confirm_remote_ips
     end
 
     def mcp_resource_url

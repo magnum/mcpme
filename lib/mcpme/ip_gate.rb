@@ -4,6 +4,7 @@ module Mcpme
   # Blocks shell commands from unknown remote IPs until confirmed via Pushover.
   class IpGate
     NOTIFY_COOLDOWN = 120
+    POLL_INTERVAL = 0.25
 
     def initialize(config:, allowlist:, confirm:, pushover:)
       @config = config
@@ -14,21 +15,42 @@ module Mcpme
       @last_notify_at = {}
     end
 
-    # Returns nil if the command may proceed, otherwise an error message for the tool.
-    def deny_reason_for(ip)
-      return nil unless @config.confirm_new_remote_ips?
+    # Returns nil if the command may proceed, otherwise a short error for the tool.
+    # Details are logged via Mcpme::Logger.
+    def ensure_allowed!(ip)
+      return nil unless @config.confirm_remote_ips?
       return "Remote IP could not be determined" if ip.nil? || ip.empty?
       return nil if RemoteIp.local?(ip)
       return nil if @allowlist.allowed?(ip)
 
-      notify!(ip)
-      if @pushover.configured?
-        "Remote IP #{ip} is not on the allowlist. A Pushover confirmation was sent — " \
-          "open the link in the notification to allow this IP, then retry the command."
-      else
-        "Remote IP #{ip} is not on the allowlist. Configure PUSHOVER_TOKEN / PUSHOVER_USER " \
-          "to receive a confirmation link, or add the IP to #{@config.allowed_remote_ips_path}."
+      unless @pushover.configured?
+        Mcpme::Logger.log(
+          "remote IP #{ip} not on allowlist — Pushover not configured (#{@config.allowed_remote_ips_path})",
+          level: "IP"
+        )
+        return "Remote IP not allowed."
       end
+
+      notify!(ip)
+      url = @confirm.confirm_url(ip)
+      wait = @config.confirm_wait_seconds
+      Mcpme::Logger.log(
+        "remote IP #{ip} not on allowlist — Pushover sent, waiting up to #{wait}s for confirmation: #{url}",
+        level: "IP"
+      )
+
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+        if @allowlist.allowed?(ip)
+          Mcpme::Logger.log("remote IP #{ip} confirmed during wait — proceeding", level: "IP")
+          return nil
+        end
+
+        sleep(POLL_INTERVAL)
+      end
+
+      Mcpme::Logger.log("remote IP #{ip} not confirmed within #{wait}s — command blocked", level: "IP")
+      "Remote IP not confirmed in time."
     end
 
     private

@@ -106,4 +106,4 @@ Output includes `exit_status` and combined stdout/stderr.
 
 This server can run arbitrary shell commands on the host. Use only on trusted local machines, keep credentials strong, and prefer Cloudflare Tunnel + OAuth.
 
-When `CONFIRM_NEW_REMOTE_IPS=1`, shell commands from unknown **public** remote IPs are blocked until you confirm via Pushover. Allowed IPs/CIDRs live in `data/allowed_remote_ips.txt` (one per line). Loopback and private ranges are always allowed. Set `PUSHOVER_TOKEN` / `PUSHOVER_USER` from https://pushover.net and keep `SECRET_KEY` private (HMAC for confirm links).
+When `CONFIRM_REMOTE_IPS=true` (or `1` / `yes` / `on`; use `false` to disable), shell commands from unknown **public** remote IPs are blocked until you confirm via Pushover. Allowed IPs/CIDRs live in `data/allowed_remote_ips.txt` (one per line). Loopback and private ranges are always allowed. Set `PUSHOVER_TOKEN` / `PUSHOVER_USER` from https://pushover.net and keep `SECRET_KEY` private (HMAC for confirm links).

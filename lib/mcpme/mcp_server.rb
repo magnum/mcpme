@@ -48,7 +48,7 @@ module Mcpme
         )
       end
 
-      if (reason = gate_deny_reason)
+      if (reason = gate_ensure_allowed)
         Mcpme::Logger.log("command blocked: #{reason}", level: "IP")
         return MCP::Tool::Response.new(
           [{ type: "text", text: reason }],
@@ -77,10 +77,10 @@ module Mcpme
       )
     end
 
-    def gate_deny_reason
+    def gate_ensure_allowed
       return nil unless @ip_gate
 
-      @ip_gate.deny_reason_for(RemoteIp.current)
+      @ip_gate.ensure_allowed!(RemoteIp.current)
     end
   end
 end
