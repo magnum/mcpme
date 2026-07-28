@@ -1,15 +1,21 @@
 # frozen_string_literal: true
 
+require "json"
+require "fileutils"
+require "time"
+
 module Mcpme
   module OAuth
-    # In-memory store for clients, auth codes, and access tokens.
+    # Persists clients, auth codes, and tokens to disk so restarts keep sessions.
     class Store
-      def initialize
+      def initialize(path: File.expand_path("data/oauth_store.json", Dir.pwd))
+        @path = path
         @mutex = Mutex.new
         @clients = {}
         @auth_codes = {}
         @access_tokens = {}
         @refresh_tokens = {}
+        load_from_disk!
       end
 
       def register_client(client_metadata)
@@ -30,24 +36,37 @@ module Mcpme
           created_at: Time.now.utc
         }
 
-        @mutex.synchronize { @clients[client_id] = record }
+        @mutex.synchronize do
+          @clients[client_id] = record
+          persist_unlocked!
+        end
         record
       end
 
       def find_client(client_id)
-        @mutex.synchronize { @clients[client_id]&.dup }
+        @mutex.synchronize { deep_dup(@clients[client_id]) }
       end
 
       def save_auth_code(code, payload)
-        @mutex.synchronize { @auth_codes[code] = payload.merge(created_at: Time.now.utc) }
+        @mutex.synchronize do
+          @auth_codes[code] = payload.merge(created_at: Time.now.utc)
+          persist_unlocked!
+        end
       end
 
       def consume_auth_code(code)
-        @mutex.synchronize { @auth_codes.delete(code) }
+        @mutex.synchronize do
+          record = @auth_codes.delete(code)
+          persist_unlocked! if record
+          record
+        end
       end
 
       def save_access_token(token, payload)
-        @mutex.synchronize { @access_tokens[token] = payload.merge(created_at: Time.now.utc) }
+        @mutex.synchronize do
+          @access_tokens[token] = payload.merge(created_at: Time.now.utc)
+          persist_unlocked!
+        end
       end
 
       def find_access_token(token)
@@ -56,16 +75,23 @@ module Mcpme
           next nil unless record
           next expire_access_token!(token) if expired?(record)
 
-          record.dup
+          deep_dup(record)
         end
       end
 
       def save_refresh_token(token, payload)
-        @mutex.synchronize { @refresh_tokens[token] = payload.merge(created_at: Time.now.utc) }
+        @mutex.synchronize do
+          @refresh_tokens[token] = payload.merge(created_at: Time.now.utc)
+          persist_unlocked!
+        end
       end
 
       def consume_refresh_token(token)
-        @mutex.synchronize { @refresh_tokens.delete(token) }
+        @mutex.synchronize do
+          record = @refresh_tokens.delete(token)
+          persist_unlocked! if record
+          record
+        end
       end
 
       private
@@ -77,7 +103,88 @@ module Mcpme
 
       def expire_access_token!(token)
         @access_tokens.delete(token)
+        persist_unlocked!
         nil
+      end
+
+      def load_from_disk!
+        return unless File.file?(@path)
+
+        data = JSON.parse(File.read(@path))
+        @clients = deserialize_map(data["clients"])
+        @auth_codes = deserialize_map(data["auth_codes"])
+        @access_tokens = deserialize_map(data["access_tokens"])
+        @refresh_tokens = deserialize_map(data["refresh_tokens"])
+        purge_expired_unlocked!
+      rescue StandardError => e
+        warn "mcpme oauth store load failed: #{e.class}: #{e.message}"
+      end
+
+      def deserialize_map(raw)
+        return {} unless raw.is_a?(Hash)
+
+        raw.each_with_object({}) do |(key, value), hash|
+          hash[key.to_s] = deserialize_record(value)
+        end
+      end
+
+      def deserialize_record(value)
+        return value unless value.is_a?(Hash)
+
+        value.each_with_object({}) do |(key, entry), hash|
+          sym = key.to_sym
+          hash[sym] =
+            if entry.is_a?(String) && key.to_s.end_with?("_at")
+              Time.parse(entry).utc
+            else
+              entry
+            end
+        rescue ArgumentError, TypeError
+          hash[sym] = entry
+        end
+      end
+
+      def purge_expired_unlocked!
+        @auth_codes.delete_if { |_k, v| expired?(v) }
+        @access_tokens.delete_if { |_k, v| expired?(v) }
+        @refresh_tokens.delete_if { |_k, v| expired?(v) }
+      end
+
+      def persist_unlocked!
+        FileUtils.mkdir_p(File.dirname(@path))
+        payload = {
+          "clients" => serialize(@clients),
+          "auth_codes" => serialize(@auth_codes),
+          "access_tokens" => serialize(@access_tokens),
+          "refresh_tokens" => serialize(@refresh_tokens)
+        }
+        File.write(@path, JSON.pretty_generate(payload))
+      end
+
+      def serialize(value)
+        case value
+        when Hash
+          value.each_with_object({}) do |(key, entry), hash|
+            hash[key.to_s] = serialize(entry)
+          end
+        when Array
+          value.map { |entry| serialize(entry) }
+        when Time
+          value.utc.iso8601
+        else
+          value
+        end
+      end
+
+      def deep_dup(value)
+        case value
+        when Hash
+          value.transform_values { |entry| deep_dup(entry) }
+        when Array
+          value.map { |entry| deep_dup(entry) }
+        else
+          value
+        end
       end
     end
   end

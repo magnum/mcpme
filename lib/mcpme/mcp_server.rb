@@ -40,14 +40,18 @@ module Mcpme
     def execute_command(command)
       command = command.to_s
       if command.strip.empty?
+        Mcpme::Logger.log("command rejected: empty", level: "CMD")
         return MCP::Tool::Response.new(
           [{ type: "text", text: "Error: command must not be empty" }],
           error: true
         )
       end
 
+      Mcpme::Logger.log("command: #{command}", level: "CMD")
       output = `#{command} 2>&1`
       status = $?.exitstatus
+      Mcpme::Logger.log("exit_status: #{status}", level: "CMD")
+      Mcpme::Logger.log("output:\n#{output}", level: "CMD")
 
       text = <<~TEXT
         exit_status: #{status}
@@ -57,6 +61,7 @@ module Mcpme
 
       MCP::Tool::Response.new([{ type: "text", text: text }])
     rescue StandardError => e
+      Mcpme::Logger.log("command failed: #{e.class}: #{e.message}", level: "ERROR")
       MCP::Tool::Response.new(
         [{ type: "text", text: "Shell execution failed: #{e.class}: #{e.message}" }],
         error: true

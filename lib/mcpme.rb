@@ -12,11 +12,13 @@ require "time"
 require "base64"
 
 require_relative "mcpme/version"
+require_relative "mcpme/logger"
 require_relative "mcpme/config"
 require_relative "mcpme/tunnel_helpers"
 require_relative "mcpme/oauth/store"
 require_relative "mcpme/oauth/server"
 require_relative "mcpme/auth_middleware"
+require_relative "mcpme/access_log_middleware"
 require_relative "mcpme/mcp_server"
 require_relative "mcpme/app"
 

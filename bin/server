@@ -9,21 +9,41 @@ require "puma/configuration"
 require "puma/launcher"
 
 config = Mcpme::Config.load
-app = Mcpme::App.build(config: config)
+Mcpme::Logger.log_path = File.expand_path("log/mcpme.log", Dir.pwd)
 
-puts "mcpme listening on #{config.base_url}"
-puts "  MCP endpoint: #{config.mcp_resource_url}"
-puts "  OAuth login uses OAUTH_USER / OAUTH_PASSWORD from .env"
+Mcpme::Logger.log("mcpme listening on #{config.base_url}")
+Mcpme::Logger.log("MCP endpoint: #{config.mcp_resource_url}")
+Mcpme::Logger.log("OAuth login uses OAUTH_USER / OAUTH_PASSWORD from .env")
+
+app = Rack::Builder.new do
+  use Mcpme::AccessLogMiddleware
+  run Mcpme::App.build(config: config)
+end
+
+MCP.configure do |mcp_config|
+  mcp_config.around_request = lambda do |data, &request_handler|
+    result = request_handler.call
+    if data[:method] == "tools/call"
+      Mcpme::Logger.log(
+        "mcp #{data[:method]} tool=#{data[:tool_name]} args=#{data[:tool_arguments].inspect} error=#{data[:error].inspect}",
+        level: "MCP"
+      )
+    else
+      Mcpme::Logger.log("mcp #{data[:method]} error=#{data[:error].inspect}", level: "MCP")
+    end
+    result
+  end
+end
 
 puma_config = Puma::Configuration.new do |c|
   c.app app
   c.environment ENV.fetch("RACK_ENV", "development")
-  c.quiet false
+  c.quiet true
 
   if config.ssl_enabled?
     cert = File.expand_path(config.ssl_cert_path)
     key = File.expand_path(config.ssl_key_path)
-    puts "  TLS: #{cert} (mkcert / local)"
+    Mcpme::Logger.log("TLS: #{cert}")
     c.ssl_bind config.host, config.port, {
       cert: cert,
       key: key,
@@ -31,10 +51,9 @@ puma_config = Puma::Configuration.new do |c|
     }
   else
     if config.https?
-      warn "warning: MCP_BASE_URL is https but cert/key missing:"
-      warn "  #{config.ssl_cert_path}"
-      warn "  #{config.ssl_key_path}"
-      warn "  run: ./mcpme.sh cert"
+      Mcpme::Logger.log("warning: MCP_BASE_URL is https but cert/key missing — run ./mcpme.sh cert", level: "WARN")
+      Mcpme::Logger.log("  #{config.ssl_cert_path}", level: "WARN")
+      Mcpme::Logger.log("  #{config.ssl_key_path}", level: "WARN")
     end
     c.bind "tcp://#{config.host}:#{config.port}"
   end

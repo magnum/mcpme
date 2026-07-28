@@ -6,7 +6,7 @@ module Mcpme
     DEFAULT_KEY = "certs/localhost+2-key.pem"
 
     attr_reader :oauth_user, :oauth_password, :base_url, :host, :port,
-                :ssl_cert_path, :ssl_key_path
+                :ssl_cert_path, :ssl_key_path, :oauth_token_ttl_days
 
     def self.load
       base_url = ENV.fetch("MCP_BASE_URL", "http://127.0.0.1:9292").chomp("/")
@@ -25,11 +25,12 @@ module Mcpme
         host: host,
         port: port,
         ssl_cert_path: cert,
-        ssl_key_path: key
+        ssl_key_path: key,
+        oauth_token_ttl_days: Float(ENV.fetch("OAUTH_TOKEN_TTL_DAYS", "7"))
       )
     end
 
-    def initialize(oauth_user:, oauth_password:, base_url:, host:, port:, ssl_cert_path:, ssl_key_path:)
+    def initialize(oauth_user:, oauth_password:, base_url:, host:, port:, ssl_cert_path:, ssl_key_path:, oauth_token_ttl_days:)
       @oauth_user = oauth_user
       @oauth_password = oauth_password
       @base_url = base_url
@@ -37,6 +38,7 @@ module Mcpme
       @port = port
       @ssl_cert_path = ssl_cert_path
       @ssl_key_path = ssl_key_path
+      @oauth_token_ttl_days = oauth_token_ttl_days
     end
 
     def mcp_resource_url
@@ -52,10 +54,14 @@ module Mcpme
     end
 
     def ssl_enabled?
-      return false unless https?
       return false if ENV["SSL_ENABLED"] == "0"
+      return false unless File.file?(ssl_cert_path) && File.file?(ssl_key_path)
 
-      File.file?(ssl_cert_path) && File.file?(ssl_key_path)
+      true
+    end
+
+    def oauth_token_ttl_seconds
+      (oauth_token_ttl_days * 24 * 60 * 60).to_i
     end
 
     def credentials_match?(username, password)

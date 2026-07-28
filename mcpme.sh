@@ -295,22 +295,22 @@ cmd_logs() {
   require_macos
   require_plist
 
-  local workdir stdout_log stderr_log
+  local workdir log_file stderr_log
   workdir="$(plist_workdir)"
   if [[ -z "${workdir}" ]]; then
     echo "error: WorkingDirectory assente nel plist ${PLIST_DEST}" >&2
     exit 1
   fi
 
-  stdout_log="${workdir}/log/mcpme.stdout.log"
+  log_file="${workdir}/log/mcpme.log"
   stderr_log="${workdir}/log/mcpme.stderr.log"
   mkdir -p "${workdir}/log"
-  touch "${stdout_log}" "${stderr_log}"
+  touch "${log_file}" "${stderr_log}"
 
-  echo "seguo: ${stdout_log}"
+  echo "seguo: ${log_file}"
   echo "       ${stderr_log}"
   echo "(Ctrl-C per uscire)"
-  tail -n 50 -F "${stdout_log}" "${stderr_log}"
+  tail -n 50 -F "${log_file}" "${stderr_log}"
 }
 
 cmd_cert() {

@@ -10,8 +10,6 @@ module Mcpme
     # - Login validates OAUTH_USER / OAUTH_PASSWORD from .env
     class Server
       CODE_TTL = 300
-      ACCESS_TOKEN_TTL = 3600
-      REFRESH_TOKEN_TTL = 86_400
 
       def initialize(config:, store:)
         @config = config
@@ -246,7 +244,7 @@ module Mcpme
             scope: scope,
             resource: resource,
             username: username,
-            expires_at: now + ACCESS_TOKEN_TTL
+            expires_at: now + @config.oauth_token_ttl_seconds
           }
         )
         @store.save_refresh_token(
@@ -256,7 +254,7 @@ module Mcpme
             scope: scope,
             resource: resource,
             username: username,
-            expires_at: now + REFRESH_TOKEN_TTL
+            expires_at: now + @config.oauth_token_ttl_seconds
           }
         )
 
@@ -264,7 +262,7 @@ module Mcpme
           {
             access_token: access_token,
             token_type: "Bearer",
-            expires_in: ACCESS_TOKEN_TTL,
+            expires_in: @config.oauth_token_ttl_seconds,
             refresh_token: refresh_token,
             scope: scope
           }

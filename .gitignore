@@ -1,3 +1,4 @@
+data/
 certs/
 cloudflared/*.json
 cloudflared/config.yml
