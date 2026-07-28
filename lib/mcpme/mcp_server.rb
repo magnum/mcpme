@@ -4,7 +4,8 @@ module Mcpme
   module McpServer
     module_function
 
-    def build
+    def build(ip_gate: nil)
+      @ip_gate = ip_gate
       server = MCP::Server.new(
         name: "mcpme",
         title: "mcpme — shell sul tuo PC",
@@ -47,6 +48,14 @@ module Mcpme
         )
       end
 
+      if (reason = gate_deny_reason)
+        Mcpme::Logger.log("command blocked: #{reason}", level: "IP")
+        return MCP::Tool::Response.new(
+          [{ type: "text", text: reason }],
+          error: true
+        )
+      end
+
       Mcpme::Logger.log("command: #{command}", level: "CMD")
       output = `#{command} 2>&1`
       status = $?.exitstatus
@@ -66,6 +75,12 @@ module Mcpme
         [{ type: "text", text: "Shell execution failed: #{e.class}: #{e.message}" }],
         error: true
       )
+    end
+
+    def gate_deny_reason
+      return nil unless @ip_gate
+
+      @ip_gate.deny_reason_for(RemoteIp.current)
     end
   end
 end

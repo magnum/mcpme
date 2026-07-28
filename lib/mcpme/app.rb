@@ -14,7 +14,15 @@ module Mcpme
     def self.build(config: Config.load)
       store = OAuth::Store.new
       oauth = OAuth::Server.new(config: config, store: store)
-      mcp = McpServer.build
+      allowlist = IpAllowlist.new(path: File.expand_path(config.allowed_remote_ips_path, Dir.pwd))
+      confirm = IpConfirm.new(config: config, allowlist: allowlist)
+      pushover = Pushover.new(
+        token: config.pushover_token,
+        user: config.pushover_user,
+        device: config.pushover_device
+      )
+      ip_gate = IpGate.new(config: config, allowlist: allowlist, confirm: confirm, pushover: pushover)
+      mcp = McpServer.build(ip_gate: ip_gate)
       host = URI(config.base_url).host
       origin = config.base_url
       public = Mcpme::TunnelHelpers.public_hostname?(host)
@@ -39,13 +47,14 @@ module Mcpme
         ].uniq
       )
 
-      new(config: config, oauth: oauth, transport: transport)
+      new(config: config, oauth: oauth, transport: transport, confirm: confirm)
     end
 
-    def initialize(config:, oauth:, transport:)
+    def initialize(config:, oauth:, transport:, confirm:)
       @config = config
       @oauth = oauth
       @transport = transport
+      @confirm = confirm
       @logger = AuthMiddleware.new(
         method(:dispatch),
         oauth: oauth
@@ -62,12 +71,21 @@ module Mcpme
       request = Rack::Request.new(env)
       path = request.path_info
 
+      if path.start_with?("/confirm-ip/")
+        return @confirm.call(env)
+      end
+
       if OAUTH_PATHS.include?(path)
         return @oauth.call(env)
       end
 
       if mcp_endpoint?(request)
-        return @transport.call(env)
+        RemoteIp.current = RemoteIp.from_request(request)
+        begin
+          return @transport.call(env)
+        ensure
+          RemoteIp.current = nil
+        end
       end
 
       if path_root?(path) && (request.get? || request.head?)

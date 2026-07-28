@@ -29,6 +29,7 @@ Usage:
   mcpme.sh status          Mostra stato LaunchAgent server
   mcpme.sh start|stop|restart|logs
   mcpme.sh cert            Certificato locale mkcert (origin HTTPS)
+  mcpme.sh test-push       Invia push Pushover di prova (IP 127.0.0.1)
   mcpme.sh tunnel ...      Cloudflare Tunnel (mcpme.m6i.it → :8765)
 
 Opzioni:
@@ -37,6 +38,8 @@ Opzioni:
                com.mcpme.tunnel.
   uninstall    Rimuove server e tunnel LaunchAgent.
   cert         Cert origin locale (mkcert) per HTTPS su 127.0.0.1.
+  test-push    Invia notifica Pushover con link confirm-ip per 127.0.0.1
+               e verifica che add all'allowlist non crei duplicati.
   tunnel setup|install|uninstall|status|start|stop|restart|logs
                Tunnel nominato Cloudflare verso la porta locale.
                Default hostname: mcpme.m6i.it
@@ -313,6 +316,88 @@ cmd_logs() {
   tail -n 50 -F "${log_file}" "${stderr_log}"
 }
 
+cmd_test_push() {
+  require_repo_cwd
+
+  if [[ ! -f "${PWD}/.env" ]]; then
+    echo "error: .env assente — copia .env.example e configura PUSHOVER_* / SECRET_KEY" >&2
+    exit 1
+  fi
+
+  echo "test-push: invio Pushover per IP 127.0.0.1 + check anti-duplicati allowlist..."
+  bundle exec ruby <<'RUBY'
+# frozen_string_literal: true
+
+require_relative "lib/mcpme"
+
+TEST_IP = "127.0.0.1"
+
+config = Mcpme::Config.load
+if config.secret_key.to_s.empty?
+  warn "error: SECRET_KEY vuota in .env"
+  exit 1
+end
+
+pushover = Mcpme::Pushover.new(
+  token: config.pushover_token,
+  user: config.pushover_user,
+  device: config.pushover_device
+)
+unless pushover.configured?
+  warn "error: configura PUSHOVER_TOKEN e PUSHOVER_USER in .env"
+  exit 1
+end
+
+path = File.expand_path(config.allowed_remote_ips_path, Dir.pwd)
+allowlist = Mcpme::IpAllowlist.new(path: path)
+confirm = Mcpme::IpConfirm.new(config: config, allowlist: allowlist)
+url = confirm.confirm_url(TEST_IP)
+
+puts "IP:        #{TEST_IP}"
+puts "allowlist: #{path}"
+puts "url:       #{url}"
+puts
+
+before = allowlist.exact_count(TEST_IP)
+first = allowlist.add!(TEST_IP)
+after_first = allowlist.exact_count(TEST_IP)
+second = allowlist.add!(TEST_IP)
+after_second = allowlist.exact_count(TEST_IP)
+
+puts "allowlist add #1: #{first ? "scritto" : "già coperto / presente"} (count=#{after_first}, before=#{before})"
+puts "allowlist add #2: #{second ? "scritto" : "skip duplicato"} (count=#{after_second})"
+
+if second
+  warn "error: il secondo add! non doveva scrivere una riga"
+  exit 1
+end
+if after_second > 1
+  warn "error: trovate #{after_second} righe duplicate per #{TEST_IP}"
+  exit 1
+end
+if first && after_first != 1
+  warn "error: dopo il primo add! atteso count=1, got #{after_first}"
+  exit 1
+end
+
+puts "anti-duplicato: OK"
+puts
+
+begin
+  pushover.send_message(
+    title: "mcpme — confirm ip",
+    message: url,
+    url: url,
+    url_title: "Confirm IP"
+  )
+  puts "Pushover: inviata. Apri la notifica (o l'URL sopra) e usa Confirm / Cancel."
+rescue StandardError => e
+  warn "error: Pushover fallito: #{e.class}: #{e.message}"
+  exit 1
+end
+RUBY
+}
+
 cmd_cert() {
   require_repo_cwd
 
@@ -417,6 +502,9 @@ main() {
       ;;
     cert)
       cmd_cert
+      ;;
+    test-push)
+      cmd_test_push
       ;;
     tunnel)
       shift

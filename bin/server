@@ -14,6 +14,17 @@ Mcpme::Logger.log_path = File.expand_path("log/mcpme.log", Dir.pwd)
 Mcpme::Logger.log("mcpme listening on #{config.base_url}")
 Mcpme::Logger.log("MCP endpoint: #{config.mcp_resource_url}")
 Mcpme::Logger.log("OAuth login uses OAUTH_USER / OAUTH_PASSWORD from .env")
+if config.confirm_new_remote_ips?
+  Mcpme::Logger.log("confirm new remote IPs: ON (#{config.allowed_remote_ips_path})")
+  if config.secret_key.to_s.empty?
+    Mcpme::Logger.log("SECRET_KEY is empty — confirm links will not work", level: "WARN")
+  end
+  if config.pushover_token.to_s.empty? || config.pushover_user.to_s.empty?
+    Mcpme::Logger.log("PUSHOVER_TOKEN / PUSHOVER_USER missing — push notifications disabled", level: "WARN")
+  end
+else
+  Mcpme::Logger.log("confirm new remote IPs: OFF")
+end
 
 app = Rack::Builder.new do
   use Mcpme::AccessLogMiddleware
