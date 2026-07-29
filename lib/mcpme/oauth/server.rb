@@ -23,7 +23,9 @@ module Mcpme
         when ["GET", "/.well-known/oauth-protected-resource"],
              ["GET", "/.well-known/oauth-protected-resource/mcp"]
           json(protected_resource_metadata)
-        when ["GET", "/.well-known/oauth-authorization-server"]
+        when ["GET", "/.well-known/oauth-authorization-server"],
+             ["GET", "/.well-known/oauth-authorization-server/mcp"],
+             ["GET", "/.well-known/openid-configuration"]
           json(authorization_server_metadata)
         when ["POST", "/register"]
           register_client(request)
@@ -92,7 +94,10 @@ module Mcpme
           code_challenge_methods_supported: ["S256"],
           token_endpoint_auth_methods_supported: ["none"],
           scopes_supported: ["mcp:tools"],
-          authorization_response_iss_parameter_supported: true
+          # Advertise false for ChatGPT/Codex (rmcp): they drop the callback `iss`
+          # then require it when this flag is true (openai/codex#31573).
+          # We still send `iss` on the authorize redirect (RFC 9207).
+          authorization_response_iss_parameter_supported: false
         }
       end
 
