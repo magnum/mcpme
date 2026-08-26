@@ -42,6 +42,9 @@ module Mcpme
           "https://www.claude.ai",
           "https://claude.com",
           "https://www.claude.com",
+          "https://chatgpt.com",
+          "https://www.chatgpt.com",
+          "https://chat.openai.com",
           "https://127.0.0.1:#{config.port}",
           "https://localhost:#{config.port}",
           "http://127.0.0.1:#{config.port}",
@@ -79,6 +82,10 @@ module Mcpme
 
       if OAUTH_PATHS.include?(path)
         return @oauth.call(env)
+      end
+
+      if request.options? && (path == "/mcp" || path.start_with?("/mcp/") || path_root?(path))
+        return [204, { "content-length" => "0" }, []]
       end
 
       if mcp_endpoint?(request)

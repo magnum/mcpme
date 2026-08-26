@@ -9,6 +9,7 @@ Ruby MCP server with OAuth 2.1 that can run shell commands on the machine where 
 - Dynamic Client Registration, Protected Resource Metadata, Authorization Server Metadata
 - Tool **`run_shell`**: executes a command on the host PC via Ruby backticks and returns output + exit status
 - Optional **remote IP confirmation** via Pushover before shell commands from unknown public IPs
+- **ChatGPT web** compatibility: CORS preflight, tool annotations + `outputSchema`, MCP `2026-07-28` `server/discover`, OpenID discovery metadata
 
 ## Setup
 

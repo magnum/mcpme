@@ -26,6 +26,8 @@ require_relative "mcpme/oauth/store"
 require_relative "mcpme/oauth/server"
 require_relative "mcpme/auth_middleware"
 require_relative "mcpme/access_log_middleware"
+require_relative "mcpme/cors_middleware"
+require_relative "mcpme/modern_protocol"
 require_relative "mcpme/mcp_server"
 require_relative "mcpme/app"
 

@@ -20,6 +20,15 @@ module Mcpme
         request = Rack::Request.new(env)
 
         case [request.request_method, request.path_info]
+        when ["OPTIONS", "/.well-known/oauth-protected-resource"],
+             ["OPTIONS", "/.well-known/oauth-protected-resource/mcp"],
+             ["OPTIONS", "/.well-known/oauth-authorization-server"],
+             ["OPTIONS", "/.well-known/oauth-authorization-server/mcp"],
+             ["OPTIONS", "/.well-known/openid-configuration"],
+             ["OPTIONS", "/authorize"],
+             ["OPTIONS", "/token"],
+             ["OPTIONS", "/register"]
+          [204, { "content-length" => "0" }, []]
         when ["GET", "/.well-known/oauth-protected-resource"],
              ["GET", "/.well-known/oauth-protected-resource/mcp"]
           json(protected_resource_metadata)
@@ -94,6 +103,8 @@ module Mcpme
           code_challenge_methods_supported: ["S256"],
           token_endpoint_auth_methods_supported: ["none"],
           scopes_supported: ["mcp:tools"],
+          response_modes_supported: ["query"],
+          subject_types_supported: ["public"],
           # Advertise false for ChatGPT/Codex (rmcp): they drop the callback `iss`
           # then require it when this flag is true (openai/codex#31573).
           # We still send `iss` on the authorize redirect (RFC 9207).

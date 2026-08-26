@@ -30,6 +30,7 @@ end
 
 app = Rack::Builder.new do
   use Mcpme::AccessLogMiddleware
+  use Mcpme::CorsMiddleware
   run Mcpme::App.build(config: config)
 end
 

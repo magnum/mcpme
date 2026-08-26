@@ -8,8 +8,9 @@ module Mcpme
       @oauth = oauth
     end
 
-    def call(env)
+      def call(env)
       request = Rack::Request.new(env)
+      return @app.call(env) if request.options?
       return @app.call(env) unless requires_auth?(request)
 
       token = bearer_token(request)

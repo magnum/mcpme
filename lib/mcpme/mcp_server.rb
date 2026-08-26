@@ -2,6 +2,24 @@
 
 module Mcpme
   module McpServer
+    OUTPUT_SCHEMA = {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "Human-readable tool output." },
+        data: { description: "Structured JSON payload when the tool returns data." }
+      },
+      required: ["text"],
+      additionalProperties: false
+    }.freeze
+
+    # ChatGPT web requires these hints on every tool; Claude is lenient without them.
+    RUN_SHELL_ANNOTATIONS = {
+      read_only_hint: false,
+      destructive_hint: false,
+      idempotent_hint: false,
+      open_world_hint: true
+    }.freeze
+
     module_function
 
     def build(ip_gate: nil)
@@ -30,30 +48,26 @@ module Mcpme
           },
           required: ["command"],
           additionalProperties: false
-        }
+        },
+        output_schema: OUTPUT_SCHEMA,
+        annotations: RUN_SHELL_ANNOTATIONS
       ) do |command:, server_context:|
         Mcpme::McpServer.execute_command(command)
       end
 
-      server
+      ModernProtocol.install!(server)
     end
 
     def execute_command(command)
       command = command.to_s
       if command.strip.empty?
         Mcpme::Logger.log("command rejected: empty", level: "CMD")
-        return MCP::Tool::Response.new(
-          [{ type: "text", text: "Error: command must not be empty" }],
-          error: true
-        )
+        return tool_error("Error: command must not be empty")
       end
 
       if (reason = gate_ensure_allowed)
         Mcpme::Logger.log("command blocked: #{reason}", level: "IP")
-        return MCP::Tool::Response.new(
-          [{ type: "text", text: reason }],
-          error: true
-        )
+        return tool_error(reason)
       end
 
       Mcpme::Logger.log("command: #{command}", level: "CMD")
@@ -68,12 +82,27 @@ module Mcpme
         #{output}
       TEXT
 
-      MCP::Tool::Response.new([{ type: "text", text: text }])
+      structured_tool_result(
+        text,
+        data: { "exit_status" => status, "output" => output, "command" => command }
+      )
     rescue StandardError => e
       Mcpme::Logger.log("command failed: #{e.class}: #{e.message}", level: "ERROR")
+      tool_error("Shell execution failed: #{e.class}: #{e.message}")
+    end
+
+    def structured_tool_result(text, data:)
       MCP::Tool::Response.new(
-        [{ type: "text", text: "Shell execution failed: #{e.class}: #{e.message}" }],
-        error: true
+        [{ type: "text", text: text }],
+        structured_content: { "text" => text, "data" => data }
+      )
+    end
+
+    def tool_error(message)
+      MCP::Tool::Response.new(
+        [{ type: "text", text: message }],
+        error: true,
+        structured_content: { "text" => message, "data" => nil }
       )
     end
 
