@@ -32,6 +32,10 @@ module Mcpme
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
         mcp,
         enable_json_response: true,
+        # ChatGPT web lists tools after server/discover without Mcp-Session-Id.
+        # Stateful mode returns 400 "Missing session ID"; Claude still works
+        # with ephemeral per-request sessions in stateless mode.
+        stateless: true,
         # Behind Cloudflare Tunnel the Host is the public hostname; Anthropic
         # origins won't match same-origin, so disable DNS-rebinding checks publicly.
         dns_rebinding_protection: !public,
@@ -91,6 +95,12 @@ module Mcpme
       if mcp_endpoint?(request)
         RemoteIp.current = RemoteIp.from_request(request)
         begin
+          if request.post?
+            raw = request.body.read
+            env["mcpme.request_body"] = raw
+            request.body.rewind if request.body.respond_to?(:rewind)
+            env["rack.input"] = StringIO.new(raw)
+          end
           return @transport.call(env)
         ensure
           RemoteIp.current = nil

@@ -28,8 +28,11 @@ require_relative "mcpme/auth_middleware"
 require_relative "mcpme/access_log_middleware"
 require_relative "mcpme/cors_middleware"
 require_relative "mcpme/modern_protocol"
+require_relative "mcpme/protocol_compat"
 require_relative "mcpme/mcp_server"
 require_relative "mcpme/app"
 
 module Mcpme
 end
+
+Mcpme::ProtocolCompat.install!
