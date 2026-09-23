@@ -41,7 +41,7 @@ module Mcpme
         pushover_user: ENV.fetch("PUSHOVER_USER", ""),
         pushover_device: ENV.fetch("PUSHOVER_DEVICE", ""),
         allowed_remote_ips_path: ips_path,
-        confirm_wait_seconds: Integer(ENV.fetch("CONFIRM_WAIT_SECONDS", "15")),
+        confirm_wait_seconds: Integer(ENV.fetch("CONFIRM_WAIT_SECONDS", "30")),
         confirm_link_ttl_seconds: Integer(ENV.fetch("CONFIRM_LINK_TTL_SECONDS", "600")),
         confirm_idle_minutes: Integer(ENV.fetch("CONFIRM_IDLE_MINUTES", "60")),
         command_timeout_seconds: Integer(ENV.fetch("COMMAND_TIMEOUT_SECONDS", "60")),
