@@ -12,10 +12,11 @@ module Mcpme
       additionalProperties: false
     }.freeze
 
-    # ChatGPT web requires these hints on every tool; Claude is lenient without them.
+    # ChatGPT uses these hints to decide whether to ask before running the tool.
+    # The shell can delete files and change the machine, so it is destructive.
     RUN_SHELL_ANNOTATIONS = {
       read_only_hint: false,
-      destructive_hint: false,
+      destructive_hint: true,
       idempotent_hint: false,
       open_world_hint: true
     }.freeze

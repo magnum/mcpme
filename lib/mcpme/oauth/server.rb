@@ -10,6 +10,16 @@ module Mcpme
     # - Login validates OAUTH_USER / OAUTH_PASSWORD from .env
     class Server
       CODE_TTL = 300
+      PUBLIC_REDIRECT_HOSTS = %w[
+        chatgpt.com
+        www.chatgpt.com
+        chat.openai.com
+        claude.ai
+        www.claude.ai
+        claude.com
+        www.claude.com
+      ].freeze
+      LOOPBACK_HOSTS = %w[localhost 127.0.0.1 ::1].freeze
 
       def initialize(config:, store:)
         @config = config
@@ -119,6 +129,15 @@ module Mcpme
           return error_response(400, "invalid_client_metadata", "redirect_uris is required")
         end
 
+        rejected = redirect_uris.reject { |uri| allowed_redirect_uri?(uri) }
+        unless rejected.empty?
+          return error_response(
+            400,
+            "invalid_redirect_uri",
+            "redirect_uri must be https on chatgpt.com, claude.ai, claude.com, or http(s) on localhost"
+          )
+        end
+
         client = @store.register_client(body)
         json(
           {
@@ -144,6 +163,9 @@ module Mcpme
 
         client = @store.find_client(params["client_id"])
         return html_error(400, "Unknown client_id") unless client
+        unless allowed_redirect_uri?(params["redirect_uri"])
+          return html_error(400, "redirect_uri is not allowed")
+        end
         unless client[:redirect_uris].include?(params["redirect_uri"])
           return html_error(400, "redirect_uri is not registered for this client")
         end
@@ -162,6 +184,9 @@ module Mcpme
 
         client = @store.find_client(params["client_id"])
         return html_error(400, "Unknown client_id") unless client
+        unless allowed_redirect_uri?(params["redirect_uri"])
+          return html_error(400, "redirect_uri is not allowed")
+        end
         unless client[:redirect_uris].include?(params["redirect_uri"])
           return html_error(400, "redirect_uri is not registered for this client")
         end
@@ -217,6 +242,9 @@ module Mcpme
         end
         if params["redirect_uri"].to_s != record[:redirect_uri]
           return error_response(400, "invalid_grant", "redirect_uri mismatch")
+        end
+        unless allowed_redirect_uri?(record[:redirect_uri])
+          return error_response(400, "invalid_grant", "redirect_uri is not allowed")
         end
         unless valid_pkce?(params["code_verifier"].to_s, record[:code_challenge])
           return error_response(400, "invalid_grant", "PKCE verification failed")
@@ -283,6 +311,22 @@ module Mcpme
             scope: scope
           }
         )
+      end
+
+      def allowed_redirect_uri?(value)
+        uri = URI.parse(value.to_s)
+        return false if uri.fragment
+        return false if uri.host.to_s.empty?
+        return false if uri.userinfo
+
+        host = uri.host.downcase
+        if LOOPBACK_HOSTS.include?(host)
+          return %w[http https].include?(uri.scheme)
+        end
+
+        uri.scheme == "https" && PUBLIC_REDIRECT_HOSTS.include?(host)
+      rescue URI::InvalidURIError
+        false
       end
 
       def valid_pkce?(verifier, challenge)
