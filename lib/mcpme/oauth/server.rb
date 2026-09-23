@@ -24,6 +24,10 @@ module Mcpme
       def initialize(config:, store:)
         @config = config
         @store = store
+        @login_throttle = LoginThrottle.new(
+          max_failures: config.login_max_failures,
+          lockout_seconds: config.login_lockout_seconds
+        )
       end
 
       def call(env)
@@ -177,10 +181,20 @@ module Mcpme
         params = request.params
         username = params["username"].to_s
         password = params["password"].to_s
+        ip = RemoteIp.from_request(request)
+
+        if @login_throttle.blocked?(ip)
+          Mcpme::Logger.log("login locked for #{ip}", level: "AUTH")
+          return html(login_page(params, error: "Too many attempts. Try again later."), status: 429)
+        end
 
         unless @config.credentials_match?(username, password)
+          failures = @login_throttle.record_failure(ip)
+          Mcpme::Logger.log("login failed from #{ip} (#{failures})", level: "AUTH")
           return html(login_page(params, error: "Invalid username or password"), status: 401)
         end
+
+        @login_throttle.reset(ip)
 
         client = @store.find_client(params["client_id"])
         return html_error(400, "Unknown client_id") unless client
@@ -254,14 +268,17 @@ module Mcpme
           client_id: record[:client_id],
           scope: record[:scope],
           resource: record[:resource],
-          username: record[:username]
+          username: record[:username],
+          session_expires_at: Time.now.utc + @config.oauth_token_ttl_seconds
         )
       end
 
       def exchange_refresh_token(params)
         refresh = @store.consume_refresh_token(params["refresh_token"].to_s)
         return error_response(400, "invalid_grant", "Invalid refresh token") unless refresh
-        if refresh[:expires_at] && Time.now.utc >= refresh[:expires_at]
+
+        session_expires_at = refresh[:session_expires_at] || refresh[:expires_at]
+        if session_expires_at.nil? || Time.now.utc >= session_expires_at
           return error_response(400, "invalid_grant", "Refresh token expired")
         end
         if params["client_id"].to_s != refresh[:client_id]
@@ -272,14 +289,21 @@ module Mcpme
           client_id: refresh[:client_id],
           scope: refresh[:scope],
           resource: refresh[:resource],
-          username: refresh[:username]
+          username: refresh[:username],
+          session_expires_at: session_expires_at
         )
       end
 
-      def issue_tokens(client_id:, scope:, resource:, username:)
+      def issue_tokens(client_id:, scope:, resource:, username:, session_expires_at:)
+        now = Time.now.utc
+        if session_expires_at.nil? || now >= session_expires_at
+          return error_response(400, "invalid_grant", "Refresh token expired")
+        end
+
         access_token = SecureRandom.urlsafe_base64(32)
         refresh_token = SecureRandom.urlsafe_base64(32)
-        now = Time.now.utc
+        access_expires_at = [now + @config.oauth_token_ttl_seconds, session_expires_at].min
+        expires_in = (access_expires_at - now).to_i
 
         @store.save_access_token(
           access_token,
@@ -288,7 +312,7 @@ module Mcpme
             scope: scope,
             resource: resource,
             username: username,
-            expires_at: now + @config.oauth_token_ttl_seconds
+            expires_at: access_expires_at
           }
         )
         @store.save_refresh_token(
@@ -298,7 +322,8 @@ module Mcpme
             scope: scope,
             resource: resource,
             username: username,
-            expires_at: now + @config.oauth_token_ttl_seconds
+            expires_at: session_expires_at,
+            session_expires_at: session_expires_at
           }
         )
 
@@ -306,7 +331,7 @@ module Mcpme
           {
             access_token: access_token,
             token_type: "Bearer",
-            expires_in: @config.oauth_token_ttl_seconds,
+            expires_in: expires_in,
             refresh_token: refresh_token,
             scope: scope
           }

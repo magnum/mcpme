@@ -12,21 +12,28 @@ module Mcpme
       @allowlist = allowlist
     end
 
-    def signature_for(ip)
-      OpenSSL::HMAC.hexdigest("SHA256", @config.secret_key, normalize(ip))
+    def signature_for(ip, expires_at)
+      OpenSSL::HMAC.hexdigest("SHA256", @config.secret_key, "#{normalize(ip)}\n#{expires_at.to_i}")
     end
 
-    def valid_signature?(ip, signature)
-      expected = signature_for(ip)
+    def link_valid?(ip, signature, expires_at)
+      return false unless expires_at.to_s.match?(/\A[0-9]+\z/)
+
+      exp = expires_at.to_i
+      return false if exp <= Time.now.to_i
+
+      expected = signature_for(ip, exp)
       return false if signature.nil? || signature.empty?
       return false unless expected.bytesize == signature.bytesize
 
       Rack::Utils.secure_compare(expected, signature)
     end
 
-    def confirm_url(ip)
-      escaped = CGI.escape(normalize(ip))
-      "#{@config.base_url}/confirm-ip/#{escaped}?signature=#{signature_for(ip)}"
+    def confirm_url(ip, now: Time.now)
+      normalized = normalize(ip)
+      expires_at = now.to_i + @config.confirm_link_ttl_seconds
+      signature = signature_for(normalized, expires_at)
+      "#{@config.base_url}/confirm-ip/#{CGI.escape(normalized)}?expires=#{expires_at}&signature=#{signature}"
     end
 
     def call(env)
@@ -38,8 +45,9 @@ module Mcpme
       ip = CGI.unescape(match[1].to_s)
       action = match[2]
       signature = request.params["signature"].to_s
+      expires_at = request.params["expires"].to_s
 
-      unless RemoteIp.valid?(ip) && valid_signature?(ip, signature)
+      unless RemoteIp.valid?(ip) && link_valid?(ip, signature, expires_at)
         return html_response(403, error_page("Invalid or expired confirmation link."))
       end
 
@@ -47,7 +55,7 @@ module Mcpme
 
       case action
       when nil
-        html_response(200, prompt_page(ip, signature))
+        html_response(200, prompt_page(ip, signature, expires_at))
       when "confirm"
         @allowlist.add!(ip)
         Mcpme::Logger.log("confirmed remote ip #{ip}", level: "IP")
@@ -70,9 +78,10 @@ module Mcpme
       [status, { "content-type" => "text/html; charset=utf-8", "cache-control" => "no-store" }, [body]]
     end
 
-    def prompt_page(ip, signature)
-      confirm_href = "/confirm-ip/#{CGI.escape(ip)}/confirm?signature=#{CGI.escape(signature)}"
-      cancel_href = "/confirm-ip/#{CGI.escape(ip)}/cancel?signature=#{CGI.escape(signature)}"
+    def prompt_page(ip, signature, expires_at)
+      query = "expires=#{CGI.escape(expires_at.to_s)}&signature=#{CGI.escape(signature)}"
+      confirm_href = "/confirm-ip/#{CGI.escape(ip)}/confirm?#{query}"
+      cancel_href = "/confirm-ip/#{CGI.escape(ip)}/cancel?#{query}"
       <<~HTML
         <!DOCTYPE html>
         <html lang="en">

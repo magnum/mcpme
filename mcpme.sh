@@ -427,6 +427,7 @@ cmd_cert() {
 
   chmod 600 "${key}"
   chmod 644 "${cert}"
+  [[ -f "${workdir}/.env" ]] && chmod 600 "${workdir}/.env"
 
   if [[ -f "${workdir}/.env" ]]; then
     port="$(grep -E '^PORT=' "${workdir}/.env" | tail -1 | cut -d= -f2- || true)"
@@ -457,6 +458,7 @@ cmd_cert() {
     fi
 
     echo "aggiornato MCP_BASE_URL=${base_url} in .env"
+    chmod 600 "${workdir}/.env"
   else
     echo "warning: .env assente — crea .env con MCP_BASE_URL=https://127.0.0.1:PORT"
   fi

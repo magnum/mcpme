@@ -116,6 +116,7 @@ module Mcpme
         @access_tokens = deserialize_map(data["access_tokens"])
         @refresh_tokens = deserialize_map(data["refresh_tokens"])
         purge_expired_unlocked!
+        FileMode.restrict!(@path)
       rescue StandardError => e
         warn "mcpme oauth store load failed: #{e.class}: #{e.message}"
       end
@@ -158,7 +159,12 @@ module Mcpme
           "access_tokens" => serialize(@access_tokens),
           "refresh_tokens" => serialize(@refresh_tokens)
         }
-        File.write(@path, JSON.pretty_generate(payload))
+        tmp = "#{@path}.tmp"
+        File.open(tmp, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
+          file.write(JSON.pretty_generate(payload))
+        end
+        File.rename(tmp, @path)
+        FileMode.restrict!(@path)
       end
 
       def serialize(value)

@@ -24,7 +24,11 @@ module Mcpme
         device: config.pushover_device
       )
       ip_gate = IpGate.new(config: config, allowlist: allowlist, confirm: confirm, pushover: pushover)
-      mcp = McpServer.build(ip_gate: ip_gate)
+      mcp = McpServer.build(
+        ip_gate: ip_gate,
+        command_timeout: config.command_timeout_seconds,
+        command_max_output_bytes: config.command_max_output_bytes
+      )
       host = URI(config.base_url).host
       origin = config.base_url
       public = Mcpme::TunnelHelpers.public_hostname?(host)

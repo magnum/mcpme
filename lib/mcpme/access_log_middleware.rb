@@ -16,7 +16,7 @@ module Mcpme
       length = headers["Content-Length"] || headers["content-length"] || "-"
       detail = mcp_detail(env, status, body)
       Mcpme::Logger.log(
-        %(#{request.ip} "#{request.request_method} #{request.fullpath} #{request.get_header("SERVER_PROTOCOL")}" #{status} #{length} #{format("%.4f", duration)}s#{detail}),
+        %(#{request.ip} "#{request.request_method} #{logged_path(request)} #{request.get_header("SERVER_PROTOCOL")}" #{status} #{length} #{format("%.4f", duration)}s#{detail}),
         level: "HTTP"
       )
 
@@ -25,13 +25,27 @@ module Mcpme
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
       request = Rack::Request.new(env)
       Mcpme::Logger.log(
-        %(#{request.ip} "#{request.request_method} #{request.fullpath}" error=#{e.class}: #{e.message} #{format("%.4f", duration)}s),
+        %(#{request.ip} "#{request.request_method} #{logged_path(request)}" error=#{e.class}: #{e.message} #{format("%.4f", duration)}s),
         level: "HTTP"
       )
       raise
     end
 
     private
+
+    def logged_path(request)
+      path = request.fullpath
+      return path unless path.include?("/confirm-ip/")
+
+      base, query = path.split("?", 2)
+      return base unless query
+
+      filtered = Rack::Utils.parse_query(query)
+      filtered.delete("signature")
+      return base if filtered.empty?
+
+      "#{base}?#{Rack::Utils.build_query(filtered)}"
+    end
 
     def mcp_detail(env, status, body)
       return "" unless status.to_i >= 400

@@ -32,10 +32,9 @@ module Mcpme
       end
 
       notify!(ip)
-      url = @confirm.confirm_url(ip)
       wait = @config.confirm_wait_seconds
       Mcpme::Logger.log(
-        "remote IP #{ip} not on allowlist — Pushover sent, waiting up to #{wait}s for confirmation: #{url}",
+        "remote IP #{ip} not on allowlist — Pushover sent, waiting up to #{wait}s for confirmation",
         level: "IP"
       )
 
@@ -73,7 +72,7 @@ module Mcpme
         url: url,
         url_title: "Confirm IP"
       )
-      Mcpme::Logger.log("sent Pushover confirm for #{ip}: #{url}", level: "IP")
+      Mcpme::Logger.log("sent Pushover confirm for #{ip}", level: "IP")
     rescue StandardError => e
       Mcpme::Logger.log("Pushover failed for #{ip}: #{e.class}: #{e.message}", level: "ERROR")
     end

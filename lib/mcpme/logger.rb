@@ -28,6 +28,7 @@ module Mcpme
       def write(formatted_line)
         FileUtils.mkdir_p(File.dirname(log_path))
         File.open(log_path, "a") do |file|
+          file.chmod(0o600)
           file.puts(formatted_line)
           file.flush
         end

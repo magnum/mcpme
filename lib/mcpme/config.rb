@@ -9,7 +9,9 @@ module Mcpme
     attr_reader :oauth_user, :oauth_password, :base_url, :host, :port,
                 :ssl_cert_path, :ssl_key_path, :oauth_token_ttl_days,
                 :secret_key, :pushover_token, :pushover_user, :pushover_device,
-                :allowed_remote_ips_path, :confirm_wait_seconds
+                :allowed_remote_ips_path, :confirm_wait_seconds,
+                :confirm_link_ttl_seconds, :command_timeout_seconds,
+                :command_max_output_bytes, :login_max_failures, :login_lockout_seconds
 
     def self.load
       base_url = ENV.fetch("MCP_BASE_URL", "http://127.0.0.1:9292").chomp("/")
@@ -39,7 +41,12 @@ module Mcpme
         pushover_user: ENV.fetch("PUSHOVER_USER", ""),
         pushover_device: ENV.fetch("PUSHOVER_DEVICE", ""),
         allowed_remote_ips_path: ips_path,
-        confirm_wait_seconds: Integer(ENV.fetch("CONFIRM_WAIT_SECONDS", "15"))
+        confirm_wait_seconds: Integer(ENV.fetch("CONFIRM_WAIT_SECONDS", "15")),
+        confirm_link_ttl_seconds: Integer(ENV.fetch("CONFIRM_LINK_TTL_SECONDS", "600")),
+        command_timeout_seconds: Integer(ENV.fetch("COMMAND_TIMEOUT_SECONDS", "60")),
+        command_max_output_bytes: Integer(ENV.fetch("COMMAND_MAX_OUTPUT_BYTES", "1048576")),
+        login_max_failures: Integer(ENV.fetch("LOGIN_MAX_FAILURES", "8")),
+        login_lockout_seconds: Integer(ENV.fetch("LOGIN_LOCKOUT_SECONDS", "900"))
       )
     end
 
@@ -71,7 +78,12 @@ module Mcpme
       pushover_user:,
       pushover_device:,
       allowed_remote_ips_path:,
-      confirm_wait_seconds:
+      confirm_wait_seconds:,
+      confirm_link_ttl_seconds:,
+      command_timeout_seconds:,
+      command_max_output_bytes:,
+      login_max_failures:,
+      login_lockout_seconds:
     )
       @oauth_user = oauth_user
       @oauth_password = oauth_password
@@ -88,6 +100,11 @@ module Mcpme
       @pushover_device = pushover_device
       @allowed_remote_ips_path = allowed_remote_ips_path
       @confirm_wait_seconds = confirm_wait_seconds
+      @confirm_link_ttl_seconds = confirm_link_ttl_seconds
+      @command_timeout_seconds = command_timeout_seconds
+      @command_max_output_bytes = command_max_output_bytes
+      @login_max_failures = login_max_failures
+      @login_lockout_seconds = login_lockout_seconds
     end
 
     def confirm_remote_ips?

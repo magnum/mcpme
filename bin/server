@@ -11,12 +11,25 @@ require "puma/launcher"
 config = Mcpme::Config.load
 Mcpme::Logger.log_path = File.expand_path("log/mcpme.log", Dir.pwd)
 
+require "fileutils"
+[
+  File.expand_path(".env", Dir.pwd),
+  File.expand_path(config.ssl_key_path, Dir.pwd)
+].each { |path| Mcpme::FileMode.restrict!(path) }
+
+%w[log/mcpme.log log/mcpme.stdout.log log/mcpme.stderr.log].each do |relative|
+  path = File.expand_path(relative, Dir.pwd)
+  FileUtils.mkdir_p(File.dirname(path))
+  FileUtils.touch(path)
+  Mcpme::FileMode.restrict!(path)
+end
+
 Mcpme::Logger.log("mcpme listening on #{config.base_url}")
 Mcpme::Logger.log("MCP endpoint: #{config.mcp_resource_url}")
 Mcpme::Logger.log("OAuth login uses OAUTH_USER / OAUTH_PASSWORD from .env")
 if config.confirm_remote_ips?
   Mcpme::Logger.log(
-    "confirm remote IPs: ON (#{config.allowed_remote_ips_path}, + Anthropic #{Mcpme::AnthropicIps::OUTBOUND_CIDRS.join(", ")}, + OpenAI manifest)"
+    "confirm remote IPs: ON (#{config.allowed_remote_ips_path}; confirmed IPs are saved there)"
   )
   if config.secret_key.to_s.empty?
     Mcpme::Logger.log("SECRET_KEY is empty — confirm links will not work", level: "WARN")
