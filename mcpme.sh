@@ -200,8 +200,7 @@ cmd_install() {
   : >"${workdir}/log/mcpme.stderr.log"
   : >"${workdir}/log/mcpme.stdout.log"
 
-  launchctl bootstrap "${DOMAIN}" "${PLIST_DEST}"
-  launchctl enable "${SERVICE}" 2>/dev/null || true
+  launchctl_load "${SERVICE}" "${PLIST_DEST}"
   launchctl kickstart -k "${SERVICE}"
 
   echo "installato: ${PLIST_DEST}"
@@ -263,8 +262,7 @@ cmd_start() {
     launchctl kickstart -k "${SERVICE}"
     echo "avviato (kickstart): ${SERVICE}"
   else
-    launchctl bootstrap "${DOMAIN}" "${PLIST_DEST}"
-    launchctl enable "${SERVICE}" 2>/dev/null || true
+    launchctl_load "${SERVICE}" "${PLIST_DEST}"
     launchctl kickstart -k "${SERVICE}"
     echo "caricato e avviato: ${SERVICE}"
   fi

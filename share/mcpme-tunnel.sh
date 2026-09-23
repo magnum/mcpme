@@ -42,6 +42,35 @@ tunnel_bootout_if_loaded() {
   fi
 }
 
+# bootout returns before launchd drops the job. The next bootstrap then fails
+# with "Bootstrap failed: 5: Input/output error".
+launchctl_load() {
+  local service="$1" plist="$2"
+  local attempt errfile
+  errfile="$(mktemp)"
+  launchctl enable "${service}" 2>/dev/null || true
+
+  for attempt in 1 2 3 4 5; do
+    if ! launchctl print "${service}" >/dev/null 2>&1; then
+      if launchctl bootstrap "${DOMAIN}" "${plist}" 2>"${errfile}"; then
+        rm -f "${errfile}"
+        return 0
+      fi
+    fi
+    if grep -Eq "already bootstrapped|Service already loaded" "${errfile}" 2>/dev/null; then
+      rm -f "${errfile}"
+      return 0
+    fi
+    launchctl bootout "${service}" 2>/dev/null || true
+    sleep 0.5
+  done
+
+  echo "error: impossibile caricare ${service}" >&2
+  cat "${errfile}" >&2 || true
+  rm -f "${errfile}"
+  return 1
+}
+
 tunnel_loaded() {
   launchctl print "${TUNNEL_SERVICE}" >/dev/null 2>&1
 }
@@ -243,8 +272,7 @@ cmd_tunnel_install() {
   : >"${workdir}/log/cloudflared.stdout.log"
   : >"${workdir}/log/cloudflared.stderr.log"
 
-  launchctl bootstrap "${DOMAIN}" "${TUNNEL_PLIST_DEST}"
-  launchctl enable "${TUNNEL_SERVICE}" 2>/dev/null || true
+  launchctl_load "${TUNNEL_SERVICE}" "${TUNNEL_PLIST_DEST}"
   launchctl kickstart -k "${TUNNEL_SERVICE}"
 
   echo "installato: ${TUNNEL_PLIST_DEST}"
@@ -284,8 +312,7 @@ cmd_tunnel_start() {
     launchctl kickstart -k "${TUNNEL_SERVICE}"
     echo "avviato: ${TUNNEL_SERVICE}"
   else
-    launchctl bootstrap "${DOMAIN}" "${TUNNEL_PLIST_DEST}"
-    launchctl enable "${TUNNEL_SERVICE}" 2>/dev/null || true
+    launchctl_load "${TUNNEL_SERVICE}" "${TUNNEL_PLIST_DEST}"
     launchctl kickstart -k "${TUNNEL_SERVICE}"
     echo "caricato e avviato: ${TUNNEL_SERVICE}"
   fi
