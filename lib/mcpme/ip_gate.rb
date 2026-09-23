@@ -6,9 +6,10 @@ module Mcpme
     NOTIFY_COOLDOWN = 120
     POLL_INTERVAL = 0.25
 
-    def initialize(config:, allowlist:, confirm:, pushover:)
+    def initialize(config:, allowlist:, activity:, confirm:, pushover:)
       @config = config
       @allowlist = allowlist
+      @activity = activity
       @confirm = confirm
       @pushover = pushover
       @mutex = Mutex.new
@@ -21,26 +22,33 @@ module Mcpme
       return nil unless @config.confirm_remote_ips?
       return "Remote IP could not be determined" if ip.nil? || ip.empty?
       return nil if RemoteIp.local?(ip)
-      return nil if @allowlist.allowed?(ip)
+      if @allowlist.allowed?(ip) && @activity.fresh?(ip)
+        @activity.touch!(ip)
+        return nil
+      end
 
+      idle = @allowlist.allowed?(ip)
       unless @pushover.configured?
         Mcpme::Logger.log(
-          "remote IP #{ip} not on allowlist — Pushover not configured (#{@config.allowed_remote_ips_path})",
+          "remote IP #{ip} #{idle ? "idle" : "not on allowlist"} — Pushover not configured (#{@config.allowed_remote_ips_path})",
           level: "IP"
         )
         return "Remote IP not allowed."
       end
 
+      mark = Time.now.utc
       notify!(ip)
       wait = @config.confirm_wait_seconds
+      reason = idle ? "idle for #{@config.confirm_idle_minutes}m" : "not on allowlist"
       Mcpme::Logger.log(
-        "remote IP #{ip} not on allowlist — Pushover sent, waiting up to #{wait}s for confirmation",
+        "remote IP #{ip} #{reason} — Pushover sent, waiting up to #{wait}s for confirmation",
         level: "IP"
       )
 
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
       while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
-        if @allowlist.allowed?(ip)
+        if @allowlist.allowed?(ip) && @activity.touched_after?(ip, mark)
+          @activity.touch!(ip)
           Mcpme::Logger.log("remote IP #{ip} confirmed during wait — proceeding", level: "IP")
           return nil
         end

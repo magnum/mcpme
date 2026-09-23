@@ -7,9 +7,10 @@ require "ipaddr"
 module Mcpme
   # HMAC signatures and HTML pages for remote IP confirmation.
   class IpConfirm
-    def initialize(config:, allowlist:)
+    def initialize(config:, allowlist:, activity: nil)
       @config = config
       @allowlist = allowlist
+      @activity = activity
     end
 
     def signature_for(ip, expires_at)
@@ -58,6 +59,7 @@ module Mcpme
         html_response(200, prompt_page(ip, signature, expires_at))
       when "confirm"
         @allowlist.add!(ip)
+        @activity&.touch!(ip)
         Mcpme::Logger.log("confirmed remote ip #{ip}", level: "IP")
         html_response(200, result_page(confirmed: true, ip: ip))
       when "cancel"

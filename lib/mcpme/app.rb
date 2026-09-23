@@ -17,13 +17,23 @@ module Mcpme
       store = OAuth::Store.new
       oauth = OAuth::Server.new(config: config, store: store)
       allowlist = IpAllowlist.new(path: File.expand_path(config.allowed_remote_ips_path, Dir.pwd))
-      confirm = IpConfirm.new(config: config, allowlist: allowlist)
+      activity = IpActivity.new(
+        path: File.expand_path("data/remote_ip_activity.json", Dir.pwd),
+        idle_seconds: config.confirm_idle_seconds
+      )
+      confirm = IpConfirm.new(config: config, allowlist: allowlist, activity: activity)
       pushover = Pushover.new(
         token: config.pushover_token,
         user: config.pushover_user,
         device: config.pushover_device
       )
-      ip_gate = IpGate.new(config: config, allowlist: allowlist, confirm: confirm, pushover: pushover)
+      ip_gate = IpGate.new(
+        config: config,
+        allowlist: allowlist,
+        activity: activity,
+        confirm: confirm,
+        pushover: pushover
+      )
       mcp = McpServer.build(
         ip_gate: ip_gate,
         command_timeout: config.command_timeout_seconds,
