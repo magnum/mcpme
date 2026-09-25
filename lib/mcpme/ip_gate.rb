@@ -22,8 +22,8 @@ module Mcpme
       return nil unless @config.confirm_remote_ips?
       return "Remote IP could not be determined" if ip.nil? || ip.empty?
       return nil if RemoteIp.local?(ip)
-      if @allowlist.allowed?(ip) && @activity.fresh?(ip)
-        @activity.touch!(ip)
+      if @allowlist.allowed?(ip) && idle_current?(ip)
+        @activity.touch!(ip) if @config.confirm_idle_timeout?
         return nil
       end
 
@@ -47,7 +47,7 @@ module Mcpme
 
       deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + wait
       while Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
-        if @allowlist.allowed?(ip) && @activity.touched_after?(ip, mark)
+        if @allowlist.allowed?(ip) && idle_confirmed_since?(ip, mark)
           @activity.touch!(ip)
           Mcpme::Logger.log("remote IP #{ip} confirmed during wait — proceeding", level: "IP")
           return nil
@@ -61,6 +61,18 @@ module Mcpme
     end
 
     private
+
+    def idle_current?(ip)
+      return true unless @config.confirm_idle_timeout?
+
+      @activity.fresh?(ip)
+    end
+
+    def idle_confirmed_since?(ip, mark)
+      return true unless @config.confirm_idle_timeout?
+
+      @activity.touched_after?(ip, mark)
+    end
 
     def notify!(ip)
       unless @pushover.configured?

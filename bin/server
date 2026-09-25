@@ -29,7 +29,11 @@ Mcpme::Logger.log("MCP endpoint: #{config.mcp_resource_url}")
 Mcpme::Logger.log("OAuth login uses OAUTH_USER / OAUTH_PASSWORD from .env")
 if config.confirm_remote_ips?
   Mcpme::Logger.log(
-    "confirm remote IPs: ON (#{config.allowed_remote_ips_path}; re-confirm after #{config.confirm_idle_minutes}m idle)"
+    if config.confirm_idle_timeout?
+      "confirm remote IPs: ON (#{config.allowed_remote_ips_path}; re-confirm after #{config.confirm_idle_minutes}m idle)"
+    else
+      "confirm remote IPs: ON (#{config.allowed_remote_ips_path}; confirmed IPs stay allowed)"
+    end
   )
   if config.secret_key.to_s.empty?
     Mcpme::Logger.log("SECRET_KEY is empty — confirm links will not work", level: "WARN")

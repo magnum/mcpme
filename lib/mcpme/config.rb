@@ -10,7 +10,8 @@ module Mcpme
                 :ssl_cert_path, :ssl_key_path, :oauth_token_ttl_days,
                 :secret_key, :pushover_token, :pushover_user, :pushover_device,
                 :allowed_remote_ips_path, :confirm_wait_seconds,
-                :confirm_link_ttl_seconds, :confirm_idle_minutes, :command_timeout_seconds,
+                :confirm_link_ttl_seconds, :confirm_idle_timeout, :confirm_idle_minutes,
+                :command_timeout_seconds,
                 :command_max_output_bytes, :login_max_failures, :login_lockout_seconds
 
     def self.load
@@ -43,6 +44,7 @@ module Mcpme
         allowed_remote_ips_path: ips_path,
         confirm_wait_seconds: Integer(ENV.fetch("CONFIRM_WAIT_SECONDS", "30")),
         confirm_link_ttl_seconds: Integer(ENV.fetch("CONFIRM_LINK_TTL_SECONDS", "600")),
+        confirm_idle_timeout: env_boolean(ENV["CONFIRM_IDLE_TIMEOUT"]),
         confirm_idle_minutes: Integer(ENV.fetch("CONFIRM_IDLE_MINUTES", "60")),
         command_timeout_seconds: Integer(ENV.fetch("COMMAND_TIMEOUT_SECONDS", "60")),
         command_max_output_bytes: Integer(ENV.fetch("COMMAND_MAX_OUTPUT_BYTES", "1048576")),
@@ -81,6 +83,7 @@ module Mcpme
       allowed_remote_ips_path:,
       confirm_wait_seconds:,
       confirm_link_ttl_seconds:,
+      confirm_idle_timeout:,
       confirm_idle_minutes:,
       command_timeout_seconds:,
       command_max_output_bytes:,
@@ -103,6 +106,7 @@ module Mcpme
       @allowed_remote_ips_path = allowed_remote_ips_path
       @confirm_wait_seconds = confirm_wait_seconds
       @confirm_link_ttl_seconds = confirm_link_ttl_seconds
+      @confirm_idle_timeout = confirm_idle_timeout
       @confirm_idle_minutes = confirm_idle_minutes
       @command_timeout_seconds = command_timeout_seconds
       @command_max_output_bytes = command_max_output_bytes
@@ -135,6 +139,10 @@ module Mcpme
 
     def oauth_token_ttl_seconds
       (oauth_token_ttl_days * 24 * 60 * 60).to_i
+    end
+
+    def confirm_idle_timeout?
+      @confirm_idle_timeout
     end
 
     def confirm_idle_seconds
