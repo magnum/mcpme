@@ -18,6 +18,8 @@ module Mcpme
         www.claude.ai
         claude.com
         www.claude.com
+        cursor.com
+        www.cursor.com
       ].freeze
       LOOPBACK_HOSTS = %w[localhost 127.0.0.1 ::1].freeze
 
@@ -138,7 +140,7 @@ module Mcpme
           return error_response(
             400,
             "invalid_redirect_uri",
-            "redirect_uri must be https on chatgpt.com, claude.ai, claude.com, or http(s) on localhost"
+            "redirect_uri must be https on chatgpt.com, claude.ai, claude.com, cursor.com, or http(s) on localhost"
           )
         end
 
